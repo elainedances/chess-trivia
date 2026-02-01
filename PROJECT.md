@@ -1,4 +1,4 @@
-# Chess Trivia - Stream Game
+# Chess.com Trivia - Stream Game
 
 A trivia game that auto-generates questions from any Chess.com profile. Designed for Twitch streamers to play with their chat.
 
@@ -7,28 +7,48 @@ A trivia game that auto-generates questions from any Chess.com profile. Designed
 1. Enter any Chess.com username + the person's first name
 2. Select an occasion (Anniversary / Birthday / Just Chess)
 3. The app fetches their Chess.com stats and generates 15 trivia questions
-4. Viewers answer by typing `!a` `!b` `!c` or `!d` in Twitch chat
-5. Points awarded based on speed (faster = more points)
-6. Live leaderboard tracks scores throughout the game
+4. 10 second countdown before game starts
+5. Each question: 5s preview (question only) → 15s to answer (options visible)
+6. Viewers answer by typing `!a` `!b` `!c` or `!d` in Twitch chat
+7. Points awarded based on speed + question number + streak bonus
+8. Live leaderboard tracks scores below the question
 
 ### Question Types Generated
 
-- Peak ratings (bullet, blitz, rapid)
-- Current ratings
-- Total games played
-- Win counts
+- Peak/current ratings (bullet, blitz, rapid)
+- Total games played (by format)
+- Wins, losses, draws counts
+- Win rates and draw percentages
 - Puzzle Rush best score
-- Tactics rating
+- Tactics rating (highest and lowest!)
 - Chess.com followers
-- Year joined
+- Year joined / years active
 - Country
-- Streamer status
+- FIDE rating (if available)
+- Title (GM, IM, FM, etc.)
+- League ranking
+- Rating gaps and comparisons
+
+### Points System
+
+- **Escalating base points:** Q1 = 500 max → Q15 = 1900 max (+100 per question)
+- **Speed bonus:** Faster answers = more points
+- **Streak bonus:** +100 for each consecutive correct answer (2+ in a row)
+- Streaks shown with 🔥 next to player name in leaderboard
+
+### Timing
+
+- **Pre-game:** 10 second countdown
+- **Question preview:** 5 seconds (question only, no options)
+- **Answer phase:** 15 seconds (options visible)
+- **Between questions:** 10 seconds
 
 ## Tech Stack
 
 - **Framework:** Next.js 16 (App Router)
 - **Language:** TypeScript
 - **Styling:** Tailwind CSS
+- **Fonts:** Fredoka (headings), Inter (body)
 - **Chat Integration:** Twitch IRC (WebSocket)
 - **Data Source:** Chess.com Public API
 - **Hosting:** Vercel
@@ -37,14 +57,15 @@ A trivia game that auto-generates questions from any Chess.com profile. Designed
 
 - [x] Setup page with username/name/occasion inputs
 - [x] Chess.com API integration
-- [x] Auto question generation from player stats
-- [x] Game flow (ready → question → reveal → next → finished)
+- [x] Auto question generation from player stats (25+ question types)
+- [x] Game flow (ready → countdown → preview → question → reveal → finished)
 - [x] Twitch chat connection (anonymous read-only)
-- [x] Answer parsing (!a, !b, !c, !d, a, b, c, d, 1, 2, 3, 4)
-- [x] Points system (time-based scoring)
-- [x] Live leaderboard with animations
+- [x] Answer parsing (!a, !b, !c, !d only)
+- [x] Escalating points system
+- [x] Streak bonus tracking
+- [x] Live leaderboard below questions
 - [x] Responsive design (mobile + desktop)
-- [x] Clean dark UI (no emojis)
+- [x] Festive UI with celebration colors
 - [x] Occasion-based titles (Anniversary/Birthday/Chess)
 
 ## What's Left / Known Issues
@@ -56,7 +77,6 @@ A trivia game that auto-generates questions from any Chess.com profile. Designed
 - [ ] Custom question support (add your own questions)
 - [ ] Save/export final leaderboard
 - [ ] Support for Lichess profiles
-- [ ] More question variety (opening stats, most played opponent, etc.)
 - [ ] Configurable timer duration
 - [ ] Streamer controls (pause, skip, end early)
 
@@ -109,7 +129,7 @@ chess-trivia/
 ├── src/
 │   └── app/
 │       ├── page.tsx           # Setup page
-│       ├── layout.tsx         # Root layout
+│       ├── layout.tsx         # Root layout (fonts)
 │       ├── globals.css        # Global styles
 │       ├── game/
 │       │   └── page.tsx       # Game page (questions + leaderboard)
@@ -126,6 +146,10 @@ chess-trivia/
 
 https://chess-trivia-eight.vercel.app
 
+## GitHub
+
+https://github.com/elainedances/chess-trivia
+
 ---
 
-*Built for Phoebe's stream anniversary*
+*Built for stream celebrations*
