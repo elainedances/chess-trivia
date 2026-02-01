@@ -14,10 +14,10 @@ export default function SetupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const occasions: { id: Occasion; label: string; subtitle: string }[] = [
-    { id: 'anniversary', label: 'Stream Anniversary', subtitle: 'Celebrating another year of streaming' },
-    { id: 'birthday', label: 'Birthday', subtitle: 'A special birthday celebration' },
-    { id: 'chess', label: 'Chess Trivia', subtitle: 'Just for fun' },
+  const occasions: { id: Occasion; label: string; subtitle: string; emoji: string }[] = [
+    { id: 'anniversary', label: 'Stream Anniversary', subtitle: 'Celebrating another year of streaming', emoji: '🎊' },
+    { id: 'birthday', label: 'Birthday', subtitle: 'A special birthday celebration', emoji: '🎂' },
+    { id: 'chess', label: 'Chess Trivia', subtitle: 'Just for fun', emoji: '♟️' },
   ];
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -52,20 +52,18 @@ export default function SetupPage() {
       <div className="w-full max-w-md animate-fade-in">
         {/* Header */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 mb-4">
-            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-pink-500 via-orange-400 to-yellow-400 mb-4 shadow-lg shadow-pink-500/30">
+            <span className="text-4xl">🎉</span>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Chess Trivia</h1>
-          <p className="text-neutral-400">Generate a trivia game from any Chess.com profile</p>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-pink-400 via-yellow-300 to-cyan-400 bg-clip-text text-transparent mb-2">Chess Trivia</h1>
+          <p className="text-purple-300">Generate a celebration trivia game!</p>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Chess.com Username */}
           <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-2">
+            <label className="block text-sm font-medium text-purple-200 mb-2">
               Chess.com Username
             </label>
             <input
@@ -74,13 +72,13 @@ export default function SetupPage() {
               onChange={(e) => setUsername(e.target.value)}
               placeholder="e.g. hikaru"
               required
-              className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+              className="w-full px-4 py-3 bg-purple-950/60 border border-purple-500/40 rounded-xl text-white placeholder-purple-400/50 focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 transition-colors"
             />
           </div>
 
           {/* First Name */}
           <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-2">
+            <label className="block text-sm font-medium text-purple-200 mb-2">
               First Name
             </label>
             <input
@@ -89,14 +87,14 @@ export default function SetupPage() {
               onChange={(e) => setFirstName(e.target.value)}
               placeholder="e.g. Hikaru"
               required
-              className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+              className="w-full px-4 py-3 bg-purple-950/60 border border-purple-500/40 rounded-xl text-white placeholder-purple-400/50 focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 transition-colors"
             />
-            <p className="mt-1.5 text-xs text-neutral-500">Used for the game title</p>
+            <p className="mt-1.5 text-xs text-purple-400/70">Used for the game title</p>
           </div>
 
           {/* Twitch Channel */}
           <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-2">
+            <label className="block text-sm font-medium text-purple-200 mb-2">
               Twitch Channel
             </label>
             <input
@@ -105,14 +103,14 @@ export default function SetupPage() {
               onChange={(e) => setTwitchChannel(e.target.value)}
               placeholder="e.g. gmhikaru"
               required
-              className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+              className="w-full px-4 py-3 bg-purple-950/60 border border-purple-500/40 rounded-xl text-white placeholder-purple-400/50 focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 transition-colors"
             />
-            <p className="mt-1.5 text-xs text-neutral-500">Viewers will answer in this chat</p>
+            <p className="mt-1.5 text-xs text-purple-400/70">Viewers will answer in this chat</p>
           </div>
 
           {/* Occasion Selector */}
           <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-3">
+            <label className="block text-sm font-medium text-purple-200 mb-3">
               Occasion
             </label>
             <div className="space-y-2">
@@ -123,12 +121,17 @@ export default function SetupPage() {
                   onClick={() => setOccasion(occ.id)}
                   className={`w-full p-4 rounded-xl border text-left transition-all ${
                     occasion === occ.id
-                      ? 'bg-indigo-500/10 border-indigo-500 ring-1 ring-indigo-500'
-                      : 'bg-neutral-900 border-neutral-800 hover:border-neutral-700'
+                      ? 'bg-gradient-to-r from-pink-500/20 to-yellow-500/20 border-pink-500 ring-1 ring-pink-500'
+                      : 'bg-purple-950/60 border-purple-500/40 hover:border-purple-400'
                   }`}
                 >
-                  <div className="font-medium text-white">{occ.label}</div>
-                  <div className="text-sm text-neutral-400">{occ.subtitle}</div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{occ.emoji}</span>
+                    <div>
+                      <div className="font-medium text-white">{occ.label}</div>
+                      <div className="text-sm text-purple-300">{occ.subtitle}</div>
+                    </div>
+                  </div>
                 </button>
               ))}
             </div>
@@ -145,7 +148,7 @@ export default function SetupPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-xl hover:from-indigo-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-neutral-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="w-full py-4 bg-gradient-to-r from-pink-500 via-orange-400 to-yellow-400 text-white font-bold rounded-xl hover:from-pink-600 hover:via-orange-500 hover:to-yellow-500 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 focus:ring-offset-purple-950 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] shadow-lg shadow-pink-500/30"
           >
             {loading ? (
               <span className="inline-flex items-center">
@@ -156,13 +159,13 @@ export default function SetupPage() {
                 Loading...
               </span>
             ) : (
-              'Generate Trivia Game'
+              '🎮 Generate Trivia Game'
             )}
           </button>
         </form>
 
         {/* Footer */}
-        <p className="mt-8 text-center text-xs text-neutral-600">
+        <p className="mt-8 text-center text-xs text-purple-500/60">
           Data from Chess.com Public API
         </p>
       </div>

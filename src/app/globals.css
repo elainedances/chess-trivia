@@ -1,14 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0a0a0a;
+  --background: #1a0a2e;
   --foreground: #fafafa;
-  --accent: #6366f1;
-  --accent-light: #818cf8;
-  --card: #141414;
-  --card-border: #262626;
-  --success: #22c55e;
-  --muted: #737373;
+  --accent: #f472b6;
+  --accent-secondary: #a78bfa;
+  --accent-tertiary: #38bdf8;
+  --accent-warm: #fb923c;
+  --accent-yellow: #facc15;
+  --card: #2d1b4e;
+  --card-border: #4c3575;
+  --success: #4ade80;
+  --muted: #a78bfa;
 }
 
 * {
@@ -16,11 +19,16 @@
 }
 
 body {
-  background: var(--background);
+  background: linear-gradient(135deg, #1a0a2e 0%, #2d1b4e 50%, #1e1040 100%);
+  background-attachment: fixed;
   color: var(--foreground);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-fredoka), system-ui, sans-serif;
 }
 
 /* Clean scrollbar */
