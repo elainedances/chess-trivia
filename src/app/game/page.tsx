@@ -239,6 +239,16 @@ function GameContent() {
     const timer = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
+          // Reset streaks for players who didn't answer this round
+          setScores(prevScores => {
+            const newScores = new Map(prevScores);
+            newScores.forEach((player, username) => {
+              if (!answeredThisRound.has(username) && player.streak > 0) {
+                newScores.set(username, { ...player, streak: 0 });
+              }
+            });
+            return newScores;
+          });
           setGameState('reveal');
           return REVEAL_TIME;
         }
@@ -247,7 +257,7 @@ function GameContent() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [gameState]);
+  }, [gameState, answeredThisRound]);
 
   // Reveal timer (between questions)
   useEffect(() => {
@@ -448,7 +458,7 @@ function GameContent() {
                       </div>
                     </div>
                     <p className="text-orange-300 text-sm">
-                      🔥 +100 bonus for each correct answer in a row!
+                      🔥 +100 bonus for each correct answer in a row! (Miss or wrong = streak resets)
                     </p>
                   </div>
                 </div>
@@ -503,41 +513,48 @@ function GameContent() {
         {/* Question States */}
         {(gameState === 'question-preview' || gameState === 'question' || gameState === 'reveal') && currentQuestion && (
           <div className="space-y-4 animate-fade-in">
-            {/* Progress Bar */}
+            {/* Header with question info */}
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-3">
                 <span className="text-purple-300 text-sm">
                   Question {currentQuestionIndex + 1} of {questions.length}
                 </span>
-                <span className="text-xs bg-purple-800/50 text-purple-300 px-2 py-1 rounded">
-                  Max: {getMaxPoints(currentQuestionIndex)} pts
-                </span>
+                {gameState === 'question' && (
+                  <span className="text-xs bg-purple-800/50 text-purple-300 px-2 py-1 rounded">
+                    Max: {getMaxPoints(currentQuestionIndex)} pts
+                  </span>
+                )}
               </div>
-              <span className={`text-xl font-bold ${
-                gameState === 'question' && timeLeft <= 5 ? 'text-red-400 animate-pulse' : 
-                gameState === 'question-preview' ? 'text-cyan-300' :
-                'text-yellow-300'
-              }`}>
-                {gameState === 'question-preview' ? '👀' : '⏱'} {timeLeft}s
-              </span>
+              {/* Simple counter for preview/reveal, timer for question */}
+              {gameState === 'question-preview' && (
+                <span className="text-cyan-300 text-sm">
+                  👀 Options in {timeLeft}s
+                </span>
+              )}
+              {gameState === 'reveal' && (
+                <span className="text-green-400 text-sm">
+                  Next in {timeLeft}s
+                </span>
+              )}
+              {gameState === 'question' && (
+                <span className={`text-xl font-bold ${timeLeft <= 5 ? 'text-red-400 animate-pulse' : 'text-yellow-300'}`}>
+                  ⏱ {timeLeft}s
+                </span>
+              )}
             </div>
 
-            <div className="h-2 bg-purple-900/50 rounded-full overflow-hidden border border-purple-500/30">
-              <div 
-                className={`h-full transition-all duration-1000 linear rounded-full ${
-                  gameState === 'reveal' ? 'bg-gradient-to-r from-green-400 to-emerald-500' : 
-                  gameState === 'question-preview' ? 'bg-gradient-to-r from-cyan-400 to-blue-500' :
-                  'bg-gradient-to-r from-pink-500 via-orange-400 to-yellow-400'
-                }`}
-                style={{ 
-                  width: `${(timeLeft / (
-                    gameState === 'reveal' ? REVEAL_TIME : 
-                    gameState === 'question-preview' ? QUESTION_PREVIEW_TIME :
-                    ANSWER_TIME
-                  )) * 100}%` 
-                }}
-              />
-            </div>
+            {/* Progress bar - ONLY during answer phase */}
+            {gameState === 'question' && (
+              <div className="h-2 bg-purple-900/50 rounded-full overflow-hidden border border-purple-500/30">
+                <div 
+                  className={`h-full transition-all duration-1000 linear rounded-full ${
+                    timeLeft <= 5 ? 'bg-gradient-to-r from-red-500 to-orange-500' :
+                    'bg-gradient-to-r from-pink-500 via-orange-400 to-yellow-400'
+                  }`}
+                  style={{ width: `${(timeLeft / ANSWER_TIME) * 100}%` }}
+                />
+              </div>
+            )}
 
             {/* Question Card */}
             <div className="bg-purple-950/60 border border-purple-500/30 rounded-2xl p-6 md:p-8">

@@ -396,14 +396,14 @@ export async function GET(request: Request) {
       }
     }
 
-    // Puzzle Rush best
-    if (stats.puzzle_rush?.best?.score) {
+    // Puzzle Rush best (survival mode score)
+    if (stats.puzzle_rush?.best?.score && stats.puzzle_rush.best.score > 5) {
       const correct = stats.puzzle_rush.best.score;
-      const wrong = generateWrongAnswers(correct, 3, 10);
+      const wrong = generateWrongAnswers(correct, 3, Math.max(10, Math.floor(correct * 0.3)));
       const { options, correctIndex } = shuffleWithCorrect(correct.toString(), wrong.map(String));
       questions.push({
         id: questionId++,
-        question: `What is ${name}'s best Puzzle Rush score?`,
+        question: `What is ${name}'s best Puzzle Rush Survival score? (puzzles solved)`,
         options,
         correctIndex,
       });
