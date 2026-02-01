@@ -13,16 +13,24 @@ interface Question {
 interface PlayerScore {
   username: string;
   score: number;
+  streak: number;
   lastAnswerTime: number;
 }
 
-type GameState = 'loading' | 'ready' | 'question' | 'reveal' | 'finished';
+type GameState = 'loading' | 'ready' | 'countdown' | 'question-preview' | 'question' | 'reveal' | 'finished';
 type Occasion = 'anniversary' | 'birthday' | 'chess';
 
-const QUESTION_TIME = 15; // seconds
-const REVEAL_TIME = 4; // seconds
-const MAX_POINTS = 1000;
+// Timing constants
+const COUNTDOWN_TIME = 10; // 10s before first question
+const QUESTION_PREVIEW_TIME = 5; // 5s showing question without options
+const ANSWER_TIME = 15; // 15s to answer after options appear
+const REVEAL_TIME = 10; // 10s between questions
+
+// Points: Q1=500 max, increases by 100 each question, Q15=1900 max
+const BASE_MAX_POINTS = 500;
+const POINTS_INCREMENT = 100;
 const MIN_POINTS = 100;
+const STREAK_BONUS = 100;
 
 function GameContent() {
   const searchParams = useSearchParams();
@@ -34,16 +42,22 @@ function GameContent() {
   const [gameState, setGameState] = useState<GameState>('loading');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(QUESTION_TIME);
+  const [timeLeft, setTimeLeft] = useState(COUNTDOWN_TIME);
   const [scores, setScores] = useState<Map<string, PlayerScore>>(new Map());
   const [answeredThisRound, setAnsweredThisRound] = useState<Set<string>>(new Set());
   const [error, setError] = useState('');
   const [connected, setConnected] = useState(false);
+  const [showOptions, setShowOptions] = useState(false);
   
   const wsRef = useRef<WebSocket | null>(null);
   const questionStartTimeRef = useRef<number>(0);
 
   const currentQuestion = questions[currentQuestionIndex];
+
+  // Calculate max points for current question
+  const getMaxPoints = (questionIndex: number) => {
+    return BASE_MAX_POINTS + (questionIndex * POINTS_INCREMENT);
+  };
 
   const getTitle = () => {
     switch (occasion) {
@@ -53,19 +67,19 @@ function GameContent() {
         return `${name}'s Birthday`;
       case 'chess':
       default:
-        return `${name}'s Chess Trivia`;
+        return `${name}'s Chess.com Trivia`;
     }
   };
 
   const getSubtitle = () => {
     switch (occasion) {
       case 'anniversary':
-        return 'Anniversary Trivia Challenge';
+        return 'Chess.com Anniversary Trivia';
       case 'birthday':
-        return 'Birthday Trivia Challenge';
+        return 'Chess.com Birthday Trivia';
       case 'chess':
       default:
-        return 'Trivia Challenge';
+        return 'Chess.com Trivia Challenge';
     }
   };
 
@@ -133,41 +147,92 @@ function GameContent() {
   }, [twitchChannel, gameState]);
 
   const handleChatMessage = useCallback((chatUsername: string, message: string) => {
-    if (gameState !== 'question') return;
+    // Only accept answers during question phase with options showing
+    if (gameState !== 'question' || !showOptions) return;
     if (!currentQuestion) return;
     if (answeredThisRound.has(chatUsername)) return;
 
+    // ONLY accept !a, !b, !c, !d
     const answerMap: Record<string, number> = {
-      '!a': 0, '!1': 0, 'a': 0, '1': 0,
-      '!b': 1, '!2': 1, 'b': 1, '2': 1,
-      '!c': 2, '!3': 2, 'c': 2, '3': 2,
-      '!d': 3, '!4': 3, 'd': 3, '4': 3,
+      '!a': 0,
+      '!b': 1,
+      '!c': 2,
+      '!d': 3,
     };
 
     const answerIndex = answerMap[message];
     if (answerIndex === undefined || answerIndex >= currentQuestion.options.length) return;
 
+    const isCorrect = answerIndex === currentQuestion.correctIndex;
     const timeTaken = (Date.now() - questionStartTimeRef.current) / 1000;
-    const timeRatio = Math.max(0, (QUESTION_TIME - timeTaken) / QUESTION_TIME);
-    const basePoints = answerIndex === currentQuestion.correctIndex 
-      ? Math.round(MIN_POINTS + (MAX_POINTS - MIN_POINTS) * timeRatio)
+    const timeRatio = Math.max(0, (ANSWER_TIME - timeTaken) / ANSWER_TIME);
+    
+    // Calculate points: escalating base + time bonus + streak bonus
+    const maxPoints = getMaxPoints(currentQuestionIndex);
+    let basePoints = isCorrect 
+      ? Math.round(MIN_POINTS + (maxPoints - MIN_POINTS) * timeRatio)
       : 0;
 
     setScores(prev => {
       const newScores = new Map(prev);
-      const existing = newScores.get(chatUsername) || { username: chatUsername, score: 0, lastAnswerTime: 0 };
+      const existing = newScores.get(chatUsername) || { username: chatUsername, score: 0, streak: 0, lastAnswerTime: 0 };
+      
+      // Calculate streak
+      let newStreak = isCorrect ? existing.streak + 1 : 0;
+      
+      // Add streak bonus if correct and on a streak (2+ in a row)
+      const streakPoints = isCorrect && newStreak >= 2 ? STREAK_BONUS : 0;
+      
       newScores.set(chatUsername, {
         ...existing,
-        score: existing.score + basePoints,
+        score: existing.score + basePoints + streakPoints,
+        streak: newStreak,
         lastAnswerTime: Date.now(),
       });
       return newScores;
     });
 
     setAnsweredThisRound(prev => new Set(prev).add(chatUsername));
-  }, [gameState, currentQuestion, answeredThisRound]);
+  }, [gameState, showOptions, currentQuestion, answeredThisRound, currentQuestionIndex]);
 
-  // Timer logic
+  // Countdown timer (before first question)
+  useEffect(() => {
+    if (gameState !== 'countdown') return;
+
+    const timer = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          setGameState('question-preview');
+          setShowOptions(false);
+          return QUESTION_PREVIEW_TIME;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [gameState]);
+
+  // Question preview timer (showing question without options)
+  useEffect(() => {
+    if (gameState !== 'question-preview') return;
+
+    const timer = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          setGameState('question');
+          setShowOptions(true);
+          questionStartTimeRef.current = Date.now();
+          return ANSWER_TIME;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [gameState]);
+
+  // Answer timer
   useEffect(() => {
     if (gameState !== 'question') return;
 
@@ -184,7 +249,7 @@ function GameContent() {
     return () => clearInterval(timer);
   }, [gameState]);
 
-  // Reveal timer
+  // Reveal timer (between questions)
   useEffect(() => {
     if (gameState !== 'reveal') return;
 
@@ -196,11 +261,11 @@ function GameContent() {
           } else {
             setCurrentQuestionIndex(i => i + 1);
             setAnsweredThisRound(new Set());
-            setTimeLeft(QUESTION_TIME);
-            questionStartTimeRef.current = Date.now();
-            setGameState('question');
+            setShowOptions(false);
+            setGameState('question-preview');
+            return QUESTION_PREVIEW_TIME;
           }
-          return QUESTION_TIME;
+          return 0;
         }
         return prev - 1;
       });
@@ -210,15 +275,15 @@ function GameContent() {
   }, [gameState, currentQuestionIndex, questions.length]);
 
   const startGame = () => {
-    setGameState('question');
-    setTimeLeft(QUESTION_TIME);
-    questionStartTimeRef.current = Date.now();
+    setGameState('countdown');
+    setTimeLeft(COUNTDOWN_TIME);
   };
 
   const restartGame = () => {
     setCurrentQuestionIndex(0);
     setScores(new Map());
     setAnsweredThisRound(new Set());
+    setShowOptions(false);
     setGameState('ready');
   };
 
@@ -231,13 +296,13 @@ function GameContent() {
       <main className="min-h-screen flex items-center justify-center p-6">
         <div className="text-center">
           <div className="text-red-400 text-xl mb-4">{error}</div>
-          <a href="/" className="text-indigo-400 hover:underline">Go back</a>
+          <a href="/" className="text-pink-400 hover:underline">Go back</a>
         </div>
       </main>
     );
   }
 
-  // Leaderboard Component
+  // Leaderboard Component - Now full width
   const LeaderboardPanel = ({ className = '' }: { className?: string }) => (
     <div className={`bg-purple-950/60 backdrop-blur border border-purple-500/30 rounded-2xl p-5 ${className}`}>
       <div className="flex items-center justify-between mb-4">
@@ -250,13 +315,13 @@ function GameContent() {
       </div>
       
       {leaderboard.length === 0 ? (
-        <div className="text-center py-8">
-          <div className="text-purple-400 text-4xl mb-2">♟</div>
+        <div className="text-center py-6">
+          <div className="text-purple-400 text-3xl mb-2">♟</div>
           <p className="text-purple-300 text-sm">Waiting for players...</p>
           <p className="text-purple-400/60 text-xs mt-1">Type !a !b !c or !d in chat</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {leaderboard.map((player, index) => (
             <div 
               key={player.username}
@@ -275,9 +340,16 @@ function GameContent() {
                 }`}>
                   {index + 1}
                 </span>
-                <span className="text-white font-medium truncate max-w-[140px]">
-                  {player.username}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-white font-medium truncate max-w-[100px]">
+                    {player.username}
+                  </span>
+                  {player.streak >= 2 && (
+                    <span className="text-xs bg-orange-500/30 text-orange-300 px-1.5 py-0.5 rounded border border-orange-500/40">
+                      🔥{player.streak}
+                    </span>
+                  )}
+                </div>
               </div>
               <span className={`font-bold ${index === 0 ? 'text-yellow-400' : 'text-purple-200'}`}>
                 {player.score.toLocaleString()}
@@ -293,6 +365,9 @@ function GameContent() {
     <main className="min-h-screen p-4 md:p-6">
       {/* Header */}
       <header className="text-center mb-6 animate-fade-in">
+        <div className="inline-block mb-2 px-3 py-1 bg-green-500/20 border border-green-500/40 rounded-full">
+          <span className="text-green-400 text-xs font-medium">♟ Chess.com Trivia</span>
+        </div>
         <h1 className="text-2xl md:text-5xl font-bold bg-gradient-to-r from-pink-400 via-yellow-300 to-cyan-400 bg-clip-text text-transparent mb-2 drop-shadow-lg">{getTitle()}</h1>
         <p className="text-purple-300 text-sm md:text-lg">{getSubtitle()} 🎉</p>
         
@@ -305,25 +380,25 @@ function GameContent() {
       </header>
 
       {/* Main Layout */}
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-3xl mx-auto">
         {/* Loading State */}
         {gameState === 'loading' && (
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
               <div className="w-12 h-12 border-4 border-pink-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-purple-300">Loading questions...</p>
+              <p className="text-purple-300">Loading Chess.com data...</p>
             </div>
           </div>
         )}
 
         {/* Ready State - Instructions */}
         {gameState === 'ready' && (
-          <div className="max-w-2xl mx-auto py-8 animate-fade-in">
+          <div className="py-8 animate-fade-in">
             <div className="text-center mb-8">
               <div className="text-6xl mb-4">🎊</div>
               <h2 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-pink-400 bg-clip-text text-transparent mb-2">How to Play</h2>
               <p className="text-purple-300">
-                {questions.length} questions about {name}
+                {questions.length} questions about {name}&apos;s Chess.com stats
               </p>
             </div>
 
@@ -338,17 +413,14 @@ function GameContent() {
                   <div>
                     <h3 className="text-lg font-semibold text-white mb-1">How to Answer</h3>
                     <p className="text-purple-300 text-sm mb-3">
-                      Type your answer in Twitch chat using these commands:
+                      Type your answer in Twitch chat:
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      <span className="px-3 py-1.5 bg-pink-500/20 border border-pink-500/40 rounded-lg text-pink-300 font-mono text-sm">!a</span>
-                      <span className="px-3 py-1.5 bg-yellow-500/20 border border-yellow-500/40 rounded-lg text-yellow-300 font-mono text-sm">!b</span>
-                      <span className="px-3 py-1.5 bg-cyan-500/20 border border-cyan-500/40 rounded-lg text-cyan-300 font-mono text-sm">!c</span>
-                      <span className="px-3 py-1.5 bg-orange-500/20 border border-orange-500/40 rounded-lg text-orange-300 font-mono text-sm">!d</span>
+                      <span className="px-3 py-1.5 bg-pink-500/20 border border-pink-500/40 rounded-lg text-pink-300 font-mono text-sm font-bold">!a</span>
+                      <span className="px-3 py-1.5 bg-yellow-500/20 border border-yellow-500/40 rounded-lg text-yellow-300 font-mono text-sm font-bold">!b</span>
+                      <span className="px-3 py-1.5 bg-cyan-500/20 border border-cyan-500/40 rounded-lg text-cyan-300 font-mono text-sm font-bold">!c</span>
+                      <span className="px-3 py-1.5 bg-orange-500/20 border border-orange-500/40 rounded-lg text-orange-300 font-mono text-sm font-bold">!d</span>
                     </div>
-                    <p className="text-purple-400/70 text-xs mt-2">
-                      You can also just type: a, b, c, d or 1, 2, 3, 4
-                    </p>
                   </div>
                 </div>
               </div>
@@ -362,39 +434,39 @@ function GameContent() {
                   <div>
                     <h3 className="text-lg font-semibold text-white mb-1">Points System</h3>
                     <p className="text-purple-300 text-sm mb-2">
-                      Speed matters! The faster you answer correctly, the more points you get.
+                      Points increase each question! Later questions are worth more.
                     </p>
-                    <div className="flex items-center gap-4 text-sm">
+                    <div className="flex flex-wrap items-center gap-3 text-sm mb-2">
                       <div className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-green-400"></span>
-                        <span className="text-purple-200">Fast answer:</span>
-                        <span className="text-green-400 font-semibold">1000 pts</span>
+                        <span className="text-purple-200">Q1:</span>
+                        <span className="text-cyan-400 font-semibold">500 pts max</span>
                       </div>
+                      <span className="text-purple-500">→</span>
                       <div className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-yellow-400"></span>
-                        <span className="text-purple-200">Slow answer:</span>
-                        <span className="text-yellow-400 font-semibold">100 pts</span>
+                        <span className="text-purple-200">Q15:</span>
+                        <span className="text-pink-400 font-semibold">1900 pts max</span>
                       </div>
                     </div>
-                    <p className="text-purple-400/70 text-xs mt-2">
-                      Wrong answers = 0 points. Only your first answer counts!
+                    <p className="text-orange-300 text-sm">
+                      🔥 +100 bonus for each correct answer in a row!
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Timer */}
+              {/* Timing */}
               <div className="bg-purple-950/60 border border-purple-500/30 rounded-2xl p-5">
                 <div className="flex items-start gap-4">
                   <div className="w-10 h-10 rounded-xl bg-pink-500/20 border border-pink-500/30 flex items-center justify-center flex-shrink-0">
                     <span className="text-xl">⏱</span>
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-1">Time Limit</h3>
-                    <p className="text-purple-300 text-sm">
-                      You have <span className="text-yellow-300 font-semibold">{QUESTION_TIME} seconds</span> per question. 
-                      After time runs out, the correct answer is revealed for {REVEAL_TIME} seconds before the next question.
-                    </p>
+                    <h3 className="text-lg font-semibold text-white mb-1">Timing</h3>
+                    <ul className="text-purple-300 text-sm space-y-1">
+                      <li>• Question appears first for <span className="text-yellow-300 font-semibold">5 seconds</span></li>
+                      <li>• Then options appear — <span className="text-yellow-300 font-semibold">{ANSWER_TIME} seconds</span> to answer</li>
+                      <li>• Answer fast for more points!</li>
+                    </ul>
                   </div>
                 </div>
               </div>
@@ -415,40 +487,72 @@ function GameContent() {
           </div>
         )}
 
-        {/* Question State - Two Column Layout */}
-        {(gameState === 'question' || gameState === 'reveal') && currentQuestion && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
-            {/* Question Area - Takes 2 columns on large screens */}
-            <div className="lg:col-span-2 space-y-4">
-              {/* Progress Bar */}
-              <div className="flex items-center justify-between mb-2">
+        {/* Countdown State */}
+        {gameState === 'countdown' && (
+          <div className="flex items-center justify-center py-20 animate-fade-in">
+            <div className="text-center">
+              <p className="text-purple-300 text-xl mb-6">Get Ready!</p>
+              <div className="text-9xl font-bold bg-gradient-to-r from-pink-400 via-yellow-300 to-cyan-400 bg-clip-text text-transparent animate-pulse">
+                {timeLeft}
+              </div>
+              <p className="text-purple-400 mt-6">First question coming up...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Question States */}
+        {(gameState === 'question-preview' || gameState === 'question' || gameState === 'reveal') && currentQuestion && (
+          <div className="space-y-4 animate-fade-in">
+            {/* Progress Bar */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-3">
                 <span className="text-purple-300 text-sm">
                   Question {currentQuestionIndex + 1} of {questions.length}
                 </span>
-                <span className={`text-xl font-bold ${timeLeft <= 5 && gameState === 'question' ? 'text-red-400 animate-pulse' : 'text-yellow-300'}`}>
-                  ⏱ {timeLeft}s
+                <span className="text-xs bg-purple-800/50 text-purple-300 px-2 py-1 rounded">
+                  Max: {getMaxPoints(currentQuestionIndex)} pts
                 </span>
               </div>
+              <span className={`text-xl font-bold ${
+                gameState === 'question' && timeLeft <= 5 ? 'text-red-400 animate-pulse' : 
+                gameState === 'question-preview' ? 'text-cyan-300' :
+                'text-yellow-300'
+              }`}>
+                {gameState === 'question-preview' ? '👀' : '⏱'} {timeLeft}s
+              </span>
+            </div>
 
-              <div className="h-2 bg-purple-900/50 rounded-full overflow-hidden border border-purple-500/30">
-                <div 
-                  className={`h-full transition-all duration-1000 linear rounded-full ${
-                    gameState === 'reveal' ? 'bg-gradient-to-r from-green-400 to-emerald-500' : 'bg-gradient-to-r from-pink-500 via-orange-400 to-yellow-400'
-                  }`}
-                  style={{ 
-                    width: `${(timeLeft / (gameState === 'reveal' ? REVEAL_TIME : QUESTION_TIME)) * 100}%` 
-                  }}
-                />
-              </div>
+            <div className="h-2 bg-purple-900/50 rounded-full overflow-hidden border border-purple-500/30">
+              <div 
+                className={`h-full transition-all duration-1000 linear rounded-full ${
+                  gameState === 'reveal' ? 'bg-gradient-to-r from-green-400 to-emerald-500' : 
+                  gameState === 'question-preview' ? 'bg-gradient-to-r from-cyan-400 to-blue-500' :
+                  'bg-gradient-to-r from-pink-500 via-orange-400 to-yellow-400'
+                }`}
+                style={{ 
+                  width: `${(timeLeft / (
+                    gameState === 'reveal' ? REVEAL_TIME : 
+                    gameState === 'question-preview' ? QUESTION_PREVIEW_TIME :
+                    ANSWER_TIME
+                  )) * 100}%` 
+                }}
+              />
+            </div>
 
-              {/* Question Card */}
-              <div className="bg-purple-950/60 border border-purple-500/30 rounded-2xl p-6 md:p-8">
-                <h2 className="text-xl md:text-2xl font-semibold text-white text-center">
-                  {currentQuestion.question}
-                </h2>
-              </div>
+            {/* Question Card */}
+            <div className="bg-purple-950/60 border border-purple-500/30 rounded-2xl p-6 md:p-8">
+              <h2 className="text-xl md:text-2xl font-semibold text-white text-center">
+                {currentQuestion.question}
+              </h2>
+              {gameState === 'question-preview' && (
+                <p className="text-center text-purple-400 mt-4 animate-pulse">
+                  Options appearing in {timeLeft}...
+                </p>
+              )}
+            </div>
 
-              {/* Options Grid */}
+            {/* Options Grid - Only show after preview */}
+            {showOptions && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {currentQuestion.options.map((option, index) => {
                   const letter = ['A', 'B', 'C', 'D'][index];
@@ -487,49 +591,50 @@ function GameContent() {
                   );
                 })}
               </div>
+            )}
 
-              {/* Answer Hint / Reveal */}
-              <div className="text-center py-2">
-                {gameState === 'question' && (
-                  <p className="text-purple-400/80 text-sm">
-                    Type <span className="text-pink-400 font-medium">!a</span>{' '}
-                    <span className="text-yellow-400 font-medium">!b</span>{' '}
-                    <span className="text-cyan-400 font-medium">!c</span> or{' '}
-                    <span className="text-orange-400 font-medium">!d</span> in chat
-                  </p>
-                )}
-                {gameState === 'reveal' && (
-                  <p className="text-green-400 text-lg font-medium">
-                    ✅ Answer: {['A', 'B', 'C', 'D'][currentQuestion.correctIndex]} - {currentQuestion.options[currentQuestion.correctIndex]}
-                  </p>
-                )}
-              </div>
+            {/* Answer Hint / Reveal */}
+            <div className="text-center py-2">
+              {gameState === 'question' && showOptions && (
+                <p className="text-purple-400/80 text-sm">
+                  Type <span className="text-pink-400 font-medium">!a</span>{' '}
+                  <span className="text-yellow-400 font-medium">!b</span>{' '}
+                  <span className="text-cyan-400 font-medium">!c</span> or{' '}
+                  <span className="text-orange-400 font-medium">!d</span> in chat
+                </p>
+              )}
+              {gameState === 'reveal' && (
+                <p className="text-green-400 text-lg font-medium">
+                  ✅ Answer: {['A', 'B', 'C', 'D'][currentQuestion.correctIndex]} - {currentQuestion.options[currentQuestion.correctIndex]}
+                </p>
+              )}
             </div>
 
-            {/* Leaderboard - Always visible */}
-            <div className="lg:col-span-1">
-              <LeaderboardPanel className="sticky top-4" />
-            </div>
+            {/* Leaderboard - Below questions */}
+            <LeaderboardPanel />
           </div>
         )}
 
         {/* Finished State */}
         {gameState === 'finished' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
-            <div className="lg:col-span-2 flex items-center justify-center py-12">
-              <div className="text-center">
-                <div className="text-6xl mb-6">🎉</div>
-                <h2 className="text-3xl font-bold bg-gradient-to-r from-yellow-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent mb-2">Game Over!</h2>
-                <p className="text-purple-300 mb-8">Thanks for playing 🎊</p>
-                
-                {leaderboard.length > 0 && (
-                  <div className="mb-8 p-6 bg-gradient-to-r from-yellow-500/10 via-pink-500/10 to-cyan-500/10 border border-yellow-400/30 rounded-2xl">
-                    <p className="text-sm text-purple-300 mb-2">👑 Winner</p>
-                    <p className="text-2xl text-yellow-300 font-bold">{leaderboard[0].username}</p>
-                    <p className="text-pink-400 text-lg">{leaderboard[0].score.toLocaleString()} points</p>
-                  </div>
-                )}
+          <div className="space-y-6 animate-fade-in py-8">
+            <div className="text-center">
+              <div className="text-6xl mb-6">🎉</div>
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-yellow-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent mb-2">Game Over!</h2>
+              <p className="text-purple-300 mb-6">Thanks for playing 🎊</p>
+              
+              {leaderboard.length > 0 && (
+                <div className="mb-8 p-6 bg-gradient-to-r from-yellow-500/10 via-pink-500/10 to-cyan-500/10 border border-yellow-400/30 rounded-2xl inline-block">
+                  <p className="text-sm text-purple-300 mb-2">👑 Winner</p>
+                  <p className="text-3xl text-yellow-300 font-bold">{leaderboard[0].username}</p>
+                  <p className="text-pink-400 text-xl">{leaderboard[0].score.toLocaleString()} points</p>
+                  {leaderboard[0].streak >= 2 && (
+                    <p className="text-orange-300 text-sm mt-1">🔥 Ended on a {leaderboard[0].streak} streak!</p>
+                  )}
+                </div>
+              )}
 
+              <div className="block">
                 <button
                   onClick={restartGame}
                   className="px-8 py-4 bg-gradient-to-r from-pink-500 via-orange-400 to-yellow-400 text-white font-bold rounded-xl hover:from-pink-600 hover:via-orange-500 hover:to-yellow-500 transition-all transform hover:scale-105 shadow-lg shadow-pink-500/30"
@@ -540,9 +645,7 @@ function GameContent() {
             </div>
 
             {/* Final Leaderboard */}
-            <div className="lg:col-span-1">
-              <LeaderboardPanel />
-            </div>
+            <LeaderboardPanel />
           </div>
         )}
       </div>

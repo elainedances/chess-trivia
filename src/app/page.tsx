@@ -55,8 +55,8 @@ export default function SetupPage() {
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-pink-500 via-orange-400 to-yellow-400 mb-4 shadow-lg shadow-pink-500/30">
             <span className="text-4xl">🎉</span>
           </div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-pink-400 via-yellow-300 to-cyan-400 bg-clip-text text-transparent mb-2">Chess Trivia</h1>
-          <p className="text-purple-300">Generate a celebration trivia game!</p>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-pink-400 via-yellow-300 to-cyan-400 bg-clip-text text-transparent mb-2">Chess.com Trivia</h1>
+          <p className="text-purple-300">Generate a celebration trivia game from Chess.com stats!</p>
         </div>
 
         {/* Form */}
