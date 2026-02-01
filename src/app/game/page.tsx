@@ -260,14 +260,11 @@ function GameContent() {
           {leaderboard.map((player, index) => (
             <div 
               key={player.username}
-              className={`flex items-center justify-between p-3 rounded-xl transition-all ${
+              className={`flex items-center justify-between p-3 rounded-xl transition-colors ${
                 index === 0 
                   ? 'bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border border-indigo-500/30' 
                   : 'bg-neutral-800/50'
               }`}
-              style={{ 
-                animation: `slideIn 0.3s ease-out ${index * 50}ms both`
-              }}
             >
               <div className="flex items-center gap-3">
                 <span className={`w-7 h-7 flex items-center justify-center rounded-full text-sm font-bold ${
